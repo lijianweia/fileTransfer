@@ -1,0 +1,45 @@
+syntax = "proto3"; // 指定proto版本
+
+package proto;     // 指定包名
+
+// fileTransfer
+service fileTransfer {
+    rpc Open(FileRequest) returns (Response) {}
+    rpc Close(Request) returns (Response) {}
+    rpc Stat(FileRequest) returns (StatResponse) {}
+    rpc ReadAt(ReadRequest) returns (ReadResponse) {}
+}
+
+// Request 请求结构
+message Request {
+    int64 Id = 1;
+}
+
+// FileRequest 响应结构
+message FileRequest {
+    string Filename = 1;
+}
+
+// ReadRequest 响应结构
+message ReadRequest {
+    int64 Id = 1;
+    int64 Offset=2;
+    int64 Size=3;
+}
+// ReadResponse 响应结构
+message ReadResponse {
+    int64 Size = 1;
+    bytes Date=2;
+    bool EOF=3;
+}
+// StateResponse 响应结构
+message StatResponse {
+    string Type = 1;
+    int64 Size=2;
+    string LastModified=3;
+}
+// StateResponse 响应结构
+message Response {
+    int64 Id = 1;
+    bool Result=2;
+}
