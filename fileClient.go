@@ -1,27 +1,28 @@
 package transfer
 
 import (
-	"google.golang.org/grpc"
-	"log"
-	pb "github.com/transfer/proto"
 	"context"
+	pb "github.com/transfer/proto"
+	"google.golang.org/grpc"
 	"io"
+	"log"
 	"os"
 )
 
-const addressFileC  = ":50051"
-const BLOCK_SIZE = 1024*1024
+
+
 type Client struct {
-	Addr      string
-	cli pb.FileTransferClient
+	Addr string
+	cli  pb.FileTransferClient
 }
 
-func NewClient(addr string) *Client  {
-	return &Client{Addr:addr}
+func NewClient(addr string) *Client {
+	return &Client{Addr: addr}
 
 }
-func (c *Client) Dial() error  {
-	conn,err := grpc.Dial(addressFileC,grpc.WithInsecure())
+func (c *Client) Dial() error {
+
+	conn, err := grpc.Dial(AddressFileC, grpc.WithInsecure(), grpc.WithMaxMsgSize(BLOCK_SIZE*2))
 	if err != nil {
 		return err
 	}
@@ -29,35 +30,43 @@ func (c *Client) Dial() error  {
 	return nil
 }
 
-func (c* Client) Open(filename string)(SessionId,error)  {
+func (c *Client) Open(filename string) (SessionId, error) {
 	req := new(pb.FileRequest)
 	req.Filename = filename
-	response,err := c.cli.Open(context.Background(),req)
-	if err!=nil{
+
+	response, err := c.cli.Open(context.Background(), req)
+	if err != nil {
 		log.Println("---------------------")
-		return -1,err
+		return -1, err
 	}
-	return (SessionId(response.Id)),nil
+	return (SessionId(response.Id)), nil
 }
 
-func (c* Client) Stat(filename string)(*pb.StatResponse,error)  {
+func (c *Client) Stat(filename string) (*pb.StatResponse, error) {
 	req := new(pb.FileRequest)
 	req.Filename = filename
-	res,err := c.cli.Stat(context.Background(),req)
-	return res,err
+	res, err := c.cli.Stat(context.Background(), req)
+	return res, err
 }
 
 func (c *Client) GetBlock(sessionId SessionId, blockId int) ([]byte, error) {
+	log.Println("in GetBlock,blockId is", blockId)
 	return c.ReadAt(sessionId, int64(blockId)*BLOCK_SIZE, BLOCK_SIZE)
 }
 
-func (c *Client) ReadAt(sessionId SessionId, offset int64, size int) ([]byte, error) {
+func (c *Client) ReadAt(sessionId SessionId, offset int64, size int64) ([]byte, error) {
 	res := &pb.ReadResponse{Date: make([]byte, size)}
 	readReq := new(pb.ReadRequest)
 	readReq.Id = int64(sessionId)
 	readReq.Offset = offset
+
 	readReq.Size = int64(size)
-	res,err := c.cli.ReadAt(context.Background(),readReq)
+	res, err := c.cli.ReadAt(context.Background(), readReq)
+	if err != nil {
+		log.Println("in ReadAt", offset/BLOCK_SIZE, size)
+
+		log.Println(err)
+	}
 
 	if res.EOF {
 		err = io.EOF
@@ -71,7 +80,7 @@ func (c *Client) ReadAt(sessionId SessionId, offset int64, size int) ([]byte, er
 }
 
 func (c *Client) CloseSession(sessionId SessionId) error {
-	_,err := c.cli.Close(context.Background(),&pb.Request{Id:int64(sessionId)})
+	_, err := c.cli.Close(context.Background(), &pb.Request{Id: int64(sessionId)})
 	return err
 }
 
@@ -79,11 +88,41 @@ func (c *Client) Download(filename, saveFile string) error {
 	return c.DownloadAt(filename, saveFile, 0)
 }
 
-func (c *Client) DownloadAt(filename, saveFile string, blockId int) error {
-	stat, err := c.Stat(filename)
+func (c *Client) DownLoadBlock(filename, saveFile string, blockId int) error {
+	file, err := os.OpenFile(saveFile, os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
 		return err
 	}
+	defer file.Close()
+
+	sessionId, err := c.Open(filename)
+	if err != nil {
+		return err
+	}
+
+	buf, rerr := c.GetBlock(sessionId, blockId)
+	if rerr != nil && rerr != io.EOF {
+		return rerr
+	}
+	if _, werr := file.WriteAt(buf, int64(blockId)*BLOCK_SIZE); werr != nil {
+		return werr
+	}
+	log.Printf("Download %s %d completed", filename, blockId)
+
+	c.CloseSession(sessionId)
+
+	return nil
+
+}
+
+func (c *Client) DownloadAt(filename, saveFile string, blockId int) error {
+	stat, err := c.Stat(filename)
+	if err != nil {
+		log.Println("in DownloadAt :%s", err)
+		log.Println(err)
+		return err
+	}
+	log.Println("in DownLoad at")
 	blocks := int(stat.Size / BLOCK_SIZE)
 	if stat.Size%BLOCK_SIZE != 0 {
 		blocks += 1
@@ -125,6 +164,3 @@ func (c *Client) DownloadAt(filename, saveFile string, blockId int) error {
 
 	return nil
 }
-
-
-
