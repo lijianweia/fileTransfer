@@ -2,6 +2,7 @@ package transfer
 
 import (
 	"errors"
+	"fmt"
 	pb "github.com/transfer/proto"
 	"golang.org/x/net/context"
 	"io"
@@ -26,7 +27,8 @@ var FileService = fileService{}
 func (f fileService) Open(ctx context.Context, in *pb.FileRequest) (*pb.Response, error) {
 	path := filepath.Join(f.server.ReadDirectory, in.Filename)
 	println(path)
-	file, err := os.Open(path)
+	//file, err := os.Open(path)
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
 		log.Println(err)
 		return nil, err
@@ -90,4 +92,30 @@ func (f fileService) ReadAt(ctx context.Context, in *pb.ReadRequest) (*pb.ReadRe
 	log.Printf("ReadAt sessionId=%d, Offset=%d, n=%d,%d", in.Id, in.Offset, res.Size, cap(res.Date))
 
 	return &res, nil
+}
+
+func (f fileService) WriteAt(ctx context.Context, in *pb.WriteRequest) (*pb.WriteResponse, error) {
+	file := f.session.Get(SessionId(in.Id))
+	if file == nil {
+		return nil, errors.New("You must call open first.")
+	}
+	res := pb.WriteResponse{}
+	var len int
+	var werr error
+	if len, werr = file.WriteAt(in.Date[:in.Size], in.Offset); werr != nil {
+		return nil, werr
+	}
+
+	if int64(len) != in.Size {
+		return nil, fmt.Errorf("size and write len is not same!")
+	}
+
+	res.Size = int64(len)
+	res.Offset = in.Offset
+	log.Printf("WriteAt sessionId=%d, Offset=%d, n=%d,%d", in.Id, in.Offset, res.Size, len)
+
+	return &res, nil
+}
+func (f fileService) Md5Sum(ctx context.Context, in *pb.FileRequest) (*pb.Md5Response, error) {
+	return nil, nil
 }

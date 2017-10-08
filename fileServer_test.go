@@ -11,7 +11,7 @@ import (
 )
 
 func Test_server(t *testing.T) {
-	listen, err := net.Listen("tcp", addressFileC)
+	listen, err := net.Listen("tcp", AddressFileC)
 	if err != nil {
 		log.Fatal("failed to listen :%v", err)
 	}

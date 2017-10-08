@@ -4,10 +4,12 @@ package proto;     // 指定包名
 
 // fileTransfer
 service fileTransfer {
+    rpc md5sum(FileRequest) returns (Md5Response) {}
     rpc Open(FileRequest) returns (Response) {}
     rpc Close(Request) returns (Response) {}
     rpc Stat(FileRequest) returns (StatResponse) {}
     rpc ReadAt(ReadRequest) returns (ReadResponse) {}
+    rpc WriteAt(WriteRequest) returns (WriteResponse) {}
 }
 
 // Request 请求结构
@@ -19,7 +21,6 @@ message Request {
 message FileRequest {
     string Filename = 1;
 }
-
 // ReadRequest 响应结构
 message ReadRequest {
     int64 Id = 1;
@@ -42,4 +43,20 @@ message StatResponse {
 message Response {
     int64 Id = 1;
     bool Result=2;
+}
+// StateResponse 响应结构
+message Md5Response {
+    string md5sum = 1;
+}
+// ReadRequest 响应结构
+message WriteResponse {
+    int64 size = 1;
+    int64 Offset=2;
+}
+// ReadResponse 响应结构
+message WriteRequest {
+    int64 Id = 1;
+    bytes Date=2;
+    int64 Offset=3;
+    int64 Size=4;
 }

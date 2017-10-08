@@ -9,8 +9,6 @@ import (
 	"os"
 )
 
-
-
 type Client struct {
 	Addr string
 	cli  pb.FileTransferClient
@@ -47,6 +45,20 @@ func (c *Client) Stat(filename string) (*pb.StatResponse, error) {
 	req.Filename = filename
 	res, err := c.cli.Stat(context.Background(), req)
 	return res, err
+}
+func (c *Client) WriteAt(sessionId SessionId, buf []byte, offset int64, size int64) (int, error) {
+	res := &pb.WriteResponse{}
+	writeReq := new(pb.WriteRequest)
+	writeReq.Id = int64(sessionId)
+	writeReq.Offset = offset
+	writeReq.Size = int64(size)
+	writeReq.Date = buf
+	res, err := c.cli.WriteAt(context.Background(), writeReq)
+	if err != nil {
+		log.Println("in WriteAt", offset/BLOCK_SIZE, size)
+		log.Println(err)
+	}
+	return int(res.Size), nil
 }
 
 func (c *Client) GetBlock(sessionId SessionId, blockId int) ([]byte, error) {
@@ -108,6 +120,54 @@ func (c *Client) DownLoadBlock(filename, saveFile string, blockId int) error {
 		return werr
 	}
 	log.Printf("Download %s %d completed", filename, blockId)
+
+	c.CloseSession(sessionId)
+
+	return nil
+
+}
+
+func (c *Client) UploadBlock(uploadSaveFile string) error {
+	file, err := os.OpenFile("/home/li/"+uploadSaveFile, os.O_CREATE|os.O_RDONLY, 0666)
+	stat, err := file.Stat()
+	log.Printf("get file %s ,size if %v ", uploadSaveFile, stat.Size())
+	size := stat.Size()
+	blocks := int(size / BLOCK_SIZE)
+
+	if size%BLOCK_SIZE != 0 {
+		blocks += 1
+	}
+
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	sessionId, err := c.Open(uploadSaveFile + "_back")
+	if err != nil {
+		return err
+	}
+
+	buf := make([]byte, BLOCK_SIZE)
+
+	for i := 0; i < blocks; i++ {
+		n, rerr := file.ReadAt(buf, int64(i)*BLOCK_SIZE)
+		if rerr != nil && rerr != io.EOF {
+			return rerr
+		}
+		if _, werr := c.WriteAt(sessionId, buf, int64(i)*BLOCK_SIZE, int64(n)); werr != nil {
+			log.Printf("writeAt get error[%v]", werr)
+			return werr
+		}
+
+		//if i%((blocks-i)/100+1) == 0 {
+		log.Printf("Uploading %s [%d/%d] blocks", uploadSaveFile, i, blocks)
+		//}
+
+		if rerr == io.EOF {
+			break
+		}
+	}
 
 	c.CloseSession(sessionId)
 

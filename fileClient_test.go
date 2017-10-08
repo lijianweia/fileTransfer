@@ -6,6 +6,12 @@ import (
 	"testing"
 )
 
+func Test_client_updateLoad(t *testing.T) {
+	c := NewClient(AddressFileC)
+	c.Dial()
+	c.UploadBlock("java.log")
+}
+
 func Test_client(t *testing.T) {
 	//c := NewClient(addressFileC)
 	//c.Dial()
